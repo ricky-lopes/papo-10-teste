@@ -110,7 +110,7 @@ export default function Admin() {
     })
     setFiles([])
     
-    const images = await fetchProductImages(product.id)
+    const images = await fetchProductImages(product.id.toString())
     setExistingImages(images)
     setShowModal(true)
   }
