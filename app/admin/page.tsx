@@ -474,19 +474,27 @@ export default function Admin() {
               {existingImages.length > 0 && (
                 <div>
                   <label className="block text-sm font-medium mb-2">Imagens Atuais</label>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                     {existingImages.map((img) => (
                       <div key={img.id} className="relative group">
                         <img
                           src={img.image_url}
                           alt="Produto"
-                          className="w-full h-32 object-cover rounded-lg"
+                          className="w-full h-32 object-cover rounded-lg border border-neutral-700"
                         />
                         <button
-                          onClick={() => handleDeleteImage(img.id)}
-                          className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            handleDeleteImage(img.id)
+                          }}
+                          className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-lg transition-all md:opacity-0 md:group-hover:opacity-100"
+                          title="Remover imagem"
                         >
-                          ×
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
                         </button>
                       </div>
                     ))}

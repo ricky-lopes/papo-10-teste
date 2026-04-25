@@ -22,20 +22,41 @@ export default function Home() {
   const [filteredProdutos, setFilteredProdutos] = useState<ProductWithImages[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedProduct, setSelectedProduct] = useState<ProductWithImages | null>(null)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  
+  // Estados de paginação
+  const [page, setPage] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const itemsPerPage = 12
 
   // Número de WhatsApp (formato: 5511999999999)
   const whatsappNumber = '5543996457473' // ALTERE PARA SEU NÚMERO
   const instagramHandle = '@sportspapo10' // ALTERE PARA SEU INSTAGRAM
 
   useEffect(() => {
-    async function fetchData() {
-      // Buscar produtos
-      const { data: productsData } = await supabase
-        .from('camisetas')
-        .select('*')
-        .order('created_at', { ascending: false })
+    fetchProducts()
+  }, [])
 
-      if (productsData) {
+  async function fetchProducts() {
+    if (loading || !hasMore) return
+    
+    setLoading(true)
+
+    try {
+      const from = page * itemsPerPage
+      const to = from + itemsPerPage - 1
+
+      // Buscar produtos com paginação
+      const { data: productsData, error, count } = await supabase
+        .from('camisetas')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(from, to)
+
+      if (error) throw error
+
+      if (productsData && productsData.length > 0) {
         // Buscar imagens para cada produto
         const productsWithImages = await Promise.all(
           productsData.map(async (product) => {
@@ -52,13 +73,23 @@ export default function Home() {
           })
         )
 
-        setProdutos(productsWithImages)
-        setFilteredProdutos(productsWithImages)
-      }
-    }
+        setProdutos(prev => [...prev, ...productsWithImages])
+        setFilteredProdutos(prev => [...prev, ...productsWithImages])
+        setPage(prev => prev + 1)
 
-    fetchData()
-  }, [])
+        // Verificar se há mais produtos
+        if (count && produtos.length + productsWithImages.length >= count) {
+          setHasMore(false)
+        }
+      } else {
+        setHasMore(false)
+      }
+    } catch (error) {
+      console.error('Erro ao carregar produtos:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // Filtrar produtos baseado na pesquisa
   useEffect(() => {
@@ -73,6 +104,38 @@ export default function Home() {
     }
   }, [searchTerm, produtos])
 
+  // Fechar menu mobile ao rolar a página
+  useEffect(() => {
+    const handleScroll = () => {
+      if (mobileMenuOpen) {
+        setMobileMenuOpen(false)
+      }
+    }
+
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [mobileMenuOpen])
+
+  // Infinite scroll - carregar mais produtos ao chegar no final
+  useEffect(() => {
+    const handleScroll = () => {
+      // Verificar se está perto do final da página
+      const scrollTop = window.scrollY
+      const windowHeight = window.innerHeight
+      const documentHeight = document.documentElement.scrollHeight
+      
+      // Carregar mais quando estiver a 500px do final
+      if (scrollTop + windowHeight >= documentHeight - 500) {
+        if (!loading && hasMore && searchTerm === '') {
+          fetchProducts()
+        }
+      }
+    }
+
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [loading, hasMore, searchTerm])
+
   function handleWhatsAppContact(product?: ProductWithImages) {
     const message = product
       ? `Olá! Gostaria de verificar a disponibilidade da ${product.name} - ${product.team}`
@@ -86,7 +149,7 @@ export default function Home() {
     <main className="bg-black text-white min-h-screen">
 
       {/* HEADER */}
-      <header className="w-full border-b border-neutral-800 backdrop-blur-sm bg-black/50 sticky top-0 z-40">
+      <header className="w-full border-b border-neutral-800 backdrop-blur-sm bg-black/50 sticky top-0 z-50">
         <div className="max-w-[1400px] mx-auto px-6 md:px-16 py-5 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <Image 
@@ -105,13 +168,68 @@ export default function Home() {
             <a href="#contato" className="hover:text-white transition-colors duration-300">Contato</a>
           </nav>
 
-          <button className="md:hidden text-gray-400 hover:text-white">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
+          {/* Botão Menu Mobile */}
+          <button 
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden text-gray-400 hover:text-white transition-colors z-50 relative"
+            aria-label="Menu"
+          >
+            {mobileMenuOpen ? (
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            ) : (
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            )}
           </button>
         </div>
       </header>
+
+      {/* Menu Mobile Dropdown */}
+      {mobileMenuOpen && (
+        <>
+          {/* Overlay */}
+          <div 
+            className="fixed inset-0 bg-black/70 z-40 md:hidden"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          
+          {/* Menu */}
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.2 }}
+            className="fixed top-[73px] left-0 right-0 bg-black border-b border-neutral-800 z-40 md:hidden shadow-xl"
+          >
+            <nav className="flex flex-col px-6 py-2">
+              <a 
+                href="#" 
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-gray-300 hover:text-white hover:bg-neutral-900 transition-all py-4 px-4 rounded-lg"
+              >
+                Home
+              </a>
+              <a 
+                href="#colecao" 
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-gray-300 hover:text-white hover:bg-neutral-900 transition-all py-4 px-4 rounded-lg"
+              >
+                Coleção
+              </a>
+              <a 
+                href="#contato" 
+                onClick={() => setMobileMenuOpen(false)}
+                className="text-gray-300 hover:text-white hover:bg-neutral-900 transition-all py-4 px-4 rounded-lg"
+              >
+                Contato
+              </a>
+            </nav>
+          </motion.div>
+        </>
+      )}
 
       {/* HERO */}
       <section className="relative w-full overflow-hidden">
@@ -142,7 +260,7 @@ export default function Home() {
               Qualidade superior para verdadeiros apaixonados.
             </p>
 
-            <div className="flex gap-4">
+            <div className="flex flex-wrap gap-4">
               <a 
                 href="#colecao"
                 className="bg-white text-black px-8 py-4 rounded-full font-semibold hover:scale-105 transition-transform duration-300"
@@ -180,7 +298,7 @@ export default function Home() {
       {/* STATS */}
       <section className="border-y border-neutral-800 bg-neutral-900/30">
         <div className="max-w-[1400px] mx-auto px-6 md:px-16 py-12">
-          <div className="grid grid-cols-3 gap-8 text-center">
+          <div className="flex gap-8 text-center">
             <div>
               <div className="text-3xl md:text-4xl font-bold mb-2">100+</div>
               <div className="text-gray-400 text-sm">Modelos</div>
@@ -236,7 +354,7 @@ export default function Home() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
 
-            {filteredProdutos.length === 0 ? (
+            {filteredProdutos.length === 0 && !loading ? (
               <div className="col-span-full text-center py-20">
                 <p className="text-gray-400 text-lg">Nenhuma camiseta encontrada</p>
                 <button
@@ -252,7 +370,7 @@ export default function Home() {
                 key={item.id}
                 initial={{ opacity: 0, y: 40 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.08 }}
+                transition={{ delay: Math.min(index * 0.05, 0.5) }}
                 className="group cursor-pointer"
                 onClick={() => setSelectedProduct(item)}
               >
@@ -260,10 +378,11 @@ export default function Home() {
                 <div className="relative rounded-2xl overflow-hidden bg-neutral-900 border border-neutral-800 hover:border-neutral-700 transition-all duration-300">
 
                   {/* imagem */}
-                  <div className="relative h-80 overflow-hidden">
+                  <div className="relative h-80 overflow-hidden bg-neutral-800">
                     <img
                       src={item.images[0] || '/placeholder.jpg'}
                       alt={item.name}
+                      loading="lazy"
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                     />
                     
@@ -305,6 +424,23 @@ export default function Home() {
             )}
 
           </div>
+
+          {/* Loading Indicator */}
+          {loading && (
+            <div className="flex justify-center items-center py-12">
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-12 h-12 border-4 border-neutral-700 border-t-white rounded-full animate-spin"></div>
+                <p className="text-gray-400 text-sm">Carregando mais produtos...</p>
+              </div>
+            </div>
+          )}
+
+          {/* Fim dos produtos */}
+          {!hasMore && filteredProdutos.length > 0 && searchTerm === '' && (
+            <div className="text-center py-12">
+              <p className="text-gray-500 text-sm">Você viu todos os produtos disponíveis</p>
+            </div>
+          )}
         </div>
       </section>
 
